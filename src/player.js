@@ -35,7 +35,8 @@ export class Player {
     if (keys.KeyS || keys.ArrowDown) fz -= 1;
     if (keys.KeyA || keys.ArrowLeft) fx -= 1;
     if (keys.KeyD || keys.ArrowRight) fx += 1;
-    const len = Math.hypot(fx, fz);
+    if (keys.axisX || keys.axisY) { fx += keys.axisX; fz += keys.axisY; }
+    let len = Math.hypot(fx, fz);
     this.moving = len > 0;
     this.sprinting = this.moving && (keys.ShiftLeft || keys.ShiftRight) && canSprint && !this.swimming && fz > 0;
 
@@ -45,7 +46,7 @@ export class Player {
     else if (this.wading) speed *= 0.65;
 
     if (len > 0) {
-      fx /= len; fz /= len;
+      if (len > 1) { fx /= len; fz /= len; }
       const sin = Math.sin(this.yaw), cos = Math.cos(this.yaw);
       const dx = (-sin * fz + cos * fx) * speed * dt;
       const dz = (-cos * fz - sin * fx) * speed * dt;

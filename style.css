@@ -135,3 +135,55 @@ html, body {
   .slot .icon { font-size: 20px; }
   #hint { display: none; }
 }
+
+/* ---------- Touch-Steuerung (iPad, Tablets, Handys) ---------- */
+.touch-controls { display: none; }
+body.touch .touch-controls { display: grid; }
+body.touch .key-controls { display: none; }
+body.touch { touch-action: none; -webkit-touch-callout: none; -webkit-user-select: none; -webkit-tap-highlight-color: transparent; }
+body.touch #hint { display: none; }
+body.touch #stats { top: calc(14px + env(safe-area-inset-top)); bottom: auto; left: calc(14px + env(safe-area-inset-left)); z-index: 2; }
+body.touch #messages { top: calc(160px + env(safe-area-inset-top)); bottom: auto; z-index: 2; }
+body.touch #topright { z-index: 2; }
+body.touch #minimap { width: 120px; height: 120px; }
+body.touch #bottom { z-index: 3; bottom: calc(10px + env(safe-area-inset-bottom)); }
+body.touch #hotbar { pointer-events: auto; }
+body.touch .slot { width: 48px; height: 48px; }
+body.touch #prompt { z-index: 2; }
+
+#touch { position: absolute; inset: 0; }
+#t-look { position: absolute; inset: 0; pointer-events: auto; z-index: 1; }
+#t-stick {
+  position: absolute; width: 130px; height: 130px; margin: -65px 0 0 -65px; border-radius: 50%; z-index: 2;
+  background: rgba(255,255,255,.1); border: 2px solid rgba(255,255,255,.35); pointer-events: none;
+}
+#t-knob {
+  position: absolute; left: 50%; top: 50%; width: 56px; height: 56px; margin: -28px 0 0 -28px; border-radius: 50%;
+  background: rgba(255,255,255,.55); box-shadow: 0 2px 8px rgba(0,0,0,.4);
+}
+#t-top {
+  position: absolute; top: calc(12px + env(safe-area-inset-top)); left: 50%; transform: translateX(-50%);
+  display: flex; gap: 10px; z-index: 3; pointer-events: auto;
+}
+#touch button {
+  pointer-events: auto; color: #fff; border: 2px solid rgba(255,255,255,.4); background: rgba(20,28,22,.5);
+  font-family: system-ui, sans-serif; font-weight: 700; padding: 0; touch-action: none;
+  display: flex; align-items: center; justify-content: center;
+}
+#touch button.down { background: rgba(245,220,138,.55); border-color: #f5dc8a; }
+#t-top button { width: 52px; height: 52px; border-radius: 12px; font-size: 24px; }
+#t-actions {
+  position: absolute; right: calc(18px + env(safe-area-inset-right)); bottom: calc(18px + env(safe-area-inset-bottom));
+  width: 220px; height: 220px; z-index: 3; pointer-events: none;
+}
+#t-actions button { position: absolute; border-radius: 50%; }
+#t-attack { right: 0; bottom: 0; width: 104px; height: 104px; font-size: 44px; }
+#t-e { right: 118px; bottom: 6px; width: 76px; height: 76px; font-size: 34px; }
+#t-jump { right: 14px; bottom: 118px; width: 74px; height: 74px; font-size: 32px; }
+#t-r { right: 112px; bottom: 100px; width: 60px; height: 60px; font-size: 22px; }
+
+@media (max-width: 900px) {
+  body.touch .slot { width: 40px; height: 40px; }
+  body.touch .slot .icon { font-size: 20px; }
+  body.touch #bottom { left: 40%; }
+}

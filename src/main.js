@@ -9,6 +9,7 @@ import { Sound } from './audio.js';
 import { UI } from './ui.js';
 import { ITEMS, RECIPES, HOTBAR_ORDER, FOOD_PRIORITY } from './items.js';
 import { makeCampfire, makeShelter, makeViewModels, makeGhost } from './models.js';
+import { TouchControls, isTouchDevice } from './touch.js';
 
 const SAVE_KEY = 'waldlaeufer-save-v1';
 const DAY_LENGTH = 600; // Sekunden pro Spieltag
@@ -25,7 +26,8 @@ const FULL_STATS = () => ({ health: 100, hunger: 100, thirst: 100, warmth: 100, 
 class Game {
   constructor() {
     const r = this.renderer = new THREE.WebGLRenderer({ antialias: true, powerPreference: 'high-performance' });
-    r.setPixelRatio(Math.min(window.devicePixelRatio, 1.75));
+    this.isTouch = isTouchDevice();
+    r.setPixelRatio(Math.min(window.devicePixelRatio, this.isTouch ? 1.3 : 1.75));
     r.setSize(innerWidth, innerHeight);
     r.shadowMap.enabled = true;
     r.shadowMap.type = THREE.PCFSoftShadowMap;
@@ -69,6 +71,7 @@ class Game {
 
     this.sound = new Sound();
     this.ui = new UI(this);
+    this.touch = this.isTouch ? new TouchControls(this) : null;
     this.keys = {};
     this.mouseDown = false;
     this.locked = false;
@@ -130,6 +133,7 @@ class Game {
   }
 
   startNew() {
+    this.sound.init();
     this.ui.setLoading('Der Wald wird erschaffen …');
     setTimeout(() => {
       if (!this.previewWorld) this.createPreviewWorld();
@@ -149,12 +153,14 @@ class Game {
       this.begin();
       this.save();
       this.ui.message('Du erwachst allein im Wald …', 'info');
-      setTimeout(() => this.ui.message('Sammle Äste, Steine und Farne mit E.', 'info'), 1500);
-      setTimeout(() => this.ui.message('Stelle mit Tab eine Steinaxt her – vor der Nacht brauchst du ein Feuer!', 'info'), 4000);
+      const [pick, bag] = this.touch ? ['✋', '🎒'] : ['E', 'Tab'];
+      setTimeout(() => this.ui.message(`Sammle Äste, Steine und Farne mit ${pick}.`, 'info'), 1500);
+      setTimeout(() => this.ui.message(`Stelle mit ${bag} eine Steinaxt her – vor der Nacht brauchst du ein Feuer!`, 'info'), 4000);
     }, 30);
   }
 
   continueGame() {
+    this.sound.init();
     if (this.state === 'paused') { this.begin(); return; }
     let data;
     try { data = JSON.parse(localStorage.getItem(SAVE_KEY)); } catch { data = null; }
@@ -211,6 +217,7 @@ class Game {
   }
 
   pause() {
+    if (this.touch) this.touch.reset();
     this.state = 'paused';
     this.keys = {};
     this.mouseDown = false;
@@ -219,6 +226,7 @@ class Game {
   }
 
   requestLock() {
+    if (this.touch) return;
     try {
       const res = this.canvas.requestPointerLock();
       if (res && res.catch) res.catch(() => {});
@@ -283,6 +291,7 @@ class Game {
 
   toggleInventory(open = !this.invOpen) {
     this.invOpen = open;
+    if (this.touch) this.touch.reset();
     this.ui.show('inventory', open);
     this.keys = {};
     this.mouseDown = false;
@@ -578,6 +587,7 @@ class Game {
   }
 
   respawn() {
+    this.sound.init();
     for (const id of Object.keys(this.inv)) {
       const it = ITEMS[id];
       if (it.food) delete this.inv[id];
@@ -662,7 +672,8 @@ class Game {
     const frac = this.time % 1;
 
     const blocked = this.invOpen || this.sleepT !== null;
-    const landing = p.update(dt, blocked ? {} : this.keys, s.stamina > 3 && !this.exhausted);
+    const input = blocked ? {} : this.touch ? { ...this.keys, ...this.touch.input } : this.keys;
+    const landing = p.update(dt, input, s.stamina > 3 && !this.exhausted);
     if (landing > 13) this.damagePlayer((landing - 13) * 6, 'Zu tief gestürzt');
 
     if (p.sprinting) s.stamina -= 20 * dt;
@@ -692,7 +703,7 @@ class Game {
     this.updateAmbience(dt);
 
     this.attackCD -= dt;
-    if (this.mouseDown && this.locked && this.attackCD <= 0 && ITEMS[this.selected].tool) this.primary();
+    if (this.mouseDown && (this.locked || this.touch) && this.attackCD <= 0 && ITEMS[this.selected].tool) this.primary();
 
     if (prevFrac < 0.75 && frac >= 0.75) {
       this.ui.message('Die Nacht bricht herein … Wölfe streifen umher.', 'bad');

@@ -2,7 +2,10 @@
 <html lang="de">
 <head>
   <meta charset="utf-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
   <title>Waldläufer – Survival im Wald</title>
   <link rel="stylesheet" href="style.css">
   <script type="importmap">{ "imports": { "three": "./lib/three.module.min.js" } }</script>
@@ -69,7 +72,17 @@
         <button id="btn-new">Neues Spiel</button>
       </div>
       <div id="loading" class="hidden"></div>
-      <div class="controls">
+      <div class="controls touch-controls">
+        <div><kbd>Links ziehen</kbd> Laufen (ganz raus = Sprinten)</div>
+        <div><kbd>Rechts wischen</kbd> Umsehen</div>
+        <div><kbd>⚔️</kbd> Schlagen / Fällen / Benutzen</div>
+        <div><kbd>✋</kbd> Aufheben / Interagieren</div>
+        <div><kbd>R</kbd> Holz nachlegen / Flasche füllen</div>
+        <div><kbd>⤒</kbd> Springen</div>
+        <div><kbd>🎒</kbd> Rucksack &amp; Herstellen</div>
+        <div><kbd>🍖</kbd> Essen · <kbd>⏸</kbd> Pause</div>
+      </div>
+      <div class="controls key-controls">
         <div><kbd>W A S D</kbd> Bewegen</div>
         <div><kbd>Maus</kbd> Umsehen</div>
         <div><kbd>Shift</kbd> Sprinten</div>

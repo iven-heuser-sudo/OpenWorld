@@ -75,7 +75,7 @@ export class UI {
       const it = ITEMS[id];
       const count = it.tool || it.unique ? '' : `<span class="count">${inv[id] || 0}</span>`;
       const key = i < 9 ? i + 1 : i === 9 ? 0 : '';
-      return `<div class="slot${id === selected ? ' sel' : ''}" title="${it.name}">
+      return `<div class="slot${id === selected ? ' sel' : ''}" data-i="${i}" title="${it.name}">
         <span class="key">${key}</span><span class="icon">${it.icon}</span>${count}</div>`;
     }).join('');
     $('held-name').textContent = ITEMS[selected].name;
@@ -84,6 +84,7 @@ export class UI {
   setPrompt(html) {
     if (html === this.promptHtml) return;
     this.promptHtml = html;
+    if (this.g.touch) html = html.replace(/<kbd>LMB<\/kbd>/g, '<kbd>⚔️</kbd>').replace(/<kbd>E<\/kbd>/g, '<kbd>✋</kbd>');
     $('prompt').innerHTML = html;
     $('prompt').classList.toggle('hidden', !html);
   }
