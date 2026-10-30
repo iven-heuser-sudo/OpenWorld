@@ -1,0 +1,104 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Waldläufer – Survival im Wald</title>
+  <link rel="stylesheet" href="style.css">
+  <script type="importmap">{ "imports": { "three": "./lib/three.module.min.js" } }</script>
+</head>
+<body>
+  <div id="game"></div>
+  <div id="fade"></div>
+
+  <div id="hud" class="hidden">
+    <div id="crosshair"></div>
+    <div id="prompt" class="hidden"></div>
+    <div id="damage-flash"></div>
+
+    <div id="topright">
+      <canvas id="minimap" width="160" height="160"></canvas>
+      <div id="clock"></div>
+      <div id="temp"></div>
+    </div>
+
+    <div id="messages"></div>
+
+    <div id="stats">
+      <div class="stat"><span class="s-icon">❤️</span><div class="bar"><div id="bar-health" class="fill health"></div></div></div>
+      <div class="stat"><span class="s-icon">🍗</span><div class="bar"><div id="bar-hunger" class="fill hunger"></div></div></div>
+      <div class="stat"><span class="s-icon">💧</span><div class="bar"><div id="bar-thirst" class="fill thirst"></div></div></div>
+      <div class="stat"><span class="s-icon">🌡️</span><div class="bar"><div id="bar-warmth" class="fill warmth"></div></div></div>
+      <div class="stat"><span class="s-icon">⚡</span><div class="bar"><div id="bar-stamina" class="fill stamina"></div></div></div>
+    </div>
+
+    <div id="bottom">
+      <div id="held-name"></div>
+      <div id="hotbar"></div>
+    </div>
+    <div id="hint">Tab: Inventar &amp; Herstellen · F: Essen · Esc: Pause</div>
+  </div>
+
+  <div id="inventory" class="hidden">
+    <div class="panel">
+      <div class="panel-head">
+        <h2>Rucksack &amp; Herstellen</h2>
+        <button id="inv-close" title="Schließen (Tab)">✕</button>
+      </div>
+      <div class="panel-body">
+        <section>
+          <h3>Rucksack</h3>
+          <div id="inv-grid"></div>
+          <p class="tip">Tipp: Essen mit <b>F</b> oder in der Hotbar auswählen und <b>Linksklick</b>.
+            Rohes Fleisch am Lagerfeuer braten (<b>E</b>).</p>
+        </section>
+        <section>
+          <h3>Herstellen</h3>
+          <div id="craft-list"></div>
+        </section>
+      </div>
+    </div>
+  </div>
+
+  <div id="menu" class="overlay">
+    <div class="menu-box">
+      <h1>Waldläufer</h1>
+      <p id="menu-sub">Überlebe in der endlosen Wildnis</p>
+      <div class="buttons">
+        <button id="btn-continue" class="hidden">Spielstand laden</button>
+        <button id="btn-new">Neues Spiel</button>
+      </div>
+      <div id="loading" class="hidden"></div>
+      <div class="controls">
+        <div><kbd>W A S D</kbd> Bewegen</div>
+        <div><kbd>Maus</kbd> Umsehen</div>
+        <div><kbd>Shift</kbd> Sprinten</div>
+        <div><kbd>Leertaste</kbd> Springen</div>
+        <div><kbd>Linksklick</kbd> Schlagen / Fällen / Benutzen</div>
+        <div><kbd>E</kbd> Aufheben / Interagieren</div>
+        <div><kbd>R</kbd> Holz nachlegen / Flasche füllen</div>
+        <div><kbd>1–0</kbd> / <kbd>Mausrad</kbd> Hotbar</div>
+        <div><kbd>Tab</kbd> Inventar &amp; Herstellen</div>
+        <div><kbd>F</kbd> Schnell essen</div>
+      </div>
+      <p class="story">Du erwachst allein in einem riesigen Wald. Sammle Äste, Steine und Farne,
+        baue Werkzeuge, jage, entfache ein Feuer – und überstehe die kalten Nächte, wenn die Wölfe heulen.</p>
+    </div>
+  </div>
+
+  <div id="death" class="overlay hidden">
+    <div class="menu-box">
+      <h1 class="dead">Du bist gestorben</h1>
+      <p id="death-cause"></p>
+      <p id="death-days"></p>
+      <div class="buttons">
+        <button id="btn-respawn">Aufwachen</button>
+        <button id="btn-death-new">Neues Spiel</button>
+      </div>
+      <p class="story">Beim Aufwachen verlierst du deine Nahrung und die Hälfte deiner Rohstoffe.</p>
+    </div>
+  </div>
+
+  <script type="module" src="src/main.js"></script>
+</body>
+</html>
