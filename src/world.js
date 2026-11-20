@@ -1,6 +1,7 @@
 // Endlose, prozedural erzeugte Waldwelt in Chunks.
 import * as THREE from 'three';
 import { Simplex, mulberry32, hashSeed } from './noise.js';
+import { TEX, pixelate } from './textures.js';
 
 export const CHUNK = 64;
 export const SEG = 32;
@@ -31,7 +32,7 @@ function xf(x = 0, y = 0, z = 0, rx = 0, ry = 0, rz = 0, sx = 1, sy = sx, sz = s
 }
 
 let partSeed = 1;
-function part(geo, color, matrix) {
+function part(geo, color, matrix, tex = TEX.NOISE) {
   const g = geo.index ? geo.toNonIndexed() : geo;
   if (matrix) g.applyMatrix4(matrix);
   const base = new THREE.Color(color);
@@ -47,6 +48,7 @@ function part(geo, color, matrix) {
     }
   }
   g.setAttribute('color', new THREE.BufferAttribute(cols, 3));
+  g.setAttribute('texId', new THREE.BufferAttribute(new Float32Array(n).fill(tex), 1));
   return g;
 }
 
@@ -55,15 +57,18 @@ export function mergeParts(parts) {
   for (const p of parts) total += p.attributes.position.count;
   const pos = new Float32Array(total * 3);
   const col = new Float32Array(total * 3);
+  const tid = new Float32Array(total);
   let off = 0;
   for (const p of parts) {
     pos.set(p.attributes.position.array, off * 3);
     col.set(p.attributes.color.array, off * 3);
+    tid.set(p.attributes.texId.array, off);
     off += p.attributes.position.count;
   }
   const g = new THREE.BufferGeometry();
   g.setAttribute('position', new THREE.BufferAttribute(pos, 3));
   g.setAttribute('color', new THREE.BufferAttribute(col, 3));
+  g.setAttribute('texId', new THREE.BufferAttribute(tid, 1));
   g.computeVertexNormals();
   return g;
 }
@@ -72,30 +77,30 @@ function buildLibrary() {
   const trunk = 0x6b4a2f;
   const L = {};
   L.pine = mergeParts([
-    part(new THREE.CylinderGeometry(0.2, 0.32, 3.4, 6), trunk, xf(0, 1.6, 0)),
-    part(new THREE.ConeGeometry(1.9, 2.8, 7), 0x2c5a33, xf(0, 3.7, 0)),
-    part(new THREE.ConeGeometry(1.5, 2.4, 7), 0x326638, xf(0, 5.1, 0, 0, 0.4)),
-    part(new THREE.ConeGeometry(1.0, 2.0, 7), 0x38713e, xf(0, 6.4, 0, 0, 0.8)),
+    part(new THREE.CylinderGeometry(0.2, 0.32, 3.4, 6), trunk, xf(0, 1.6, 0), TEX.BARK),
+    part(new THREE.ConeGeometry(1.9, 2.8, 7), 0x2c5a33, xf(0, 3.7, 0), TEX.NEEDLES),
+    part(new THREE.ConeGeometry(1.5, 2.4, 7), 0x326638, xf(0, 5.1, 0, 0, 0.4), TEX.NEEDLES),
+    part(new THREE.ConeGeometry(1.0, 2.0, 7), 0x38713e, xf(0, 6.4, 0, 0, 0.8), TEX.NEEDLES),
   ]);
   L.oak = mergeParts([
-    part(new THREE.CylinderGeometry(0.26, 0.4, 3.2, 7), trunk, xf(0, 1.5, 0)),
-    part(new THREE.CylinderGeometry(0.1, 0.14, 1.4, 5), trunk, xf(0.5, 2.9, 0, 0, 0, -0.8)),
-    part(new THREE.IcosahedronGeometry(2.0, 0), 0x4c8638, xf(0, 4.2, 0)),
-    part(new THREE.IcosahedronGeometry(1.5, 0), 0x579540, xf(1.3, 4.0, 0.4)),
-    part(new THREE.IcosahedronGeometry(1.4, 0), 0x447c33, xf(-1.1, 4.1, -0.6)),
+    part(new THREE.CylinderGeometry(0.26, 0.4, 3.2, 7), trunk, xf(0, 1.5, 0), TEX.BARK),
+    part(new THREE.CylinderGeometry(0.1, 0.14, 1.4, 5), trunk, xf(0.5, 2.9, 0, 0, 0, -0.8), TEX.BARK),
+    part(new THREE.IcosahedronGeometry(2.0, 0), 0x4c8638, xf(0, 4.2, 0), TEX.LEAVES),
+    part(new THREE.IcosahedronGeometry(1.5, 0), 0x579540, xf(1.3, 4.0, 0.4), TEX.LEAVES),
+    part(new THREE.IcosahedronGeometry(1.4, 0), 0x447c33, xf(-1.1, 4.1, -0.6), TEX.LEAVES),
   ]);
   L.birch = mergeParts([
-    part(new THREE.CylinderGeometry(0.15, 0.21, 4.6, 6), 0xe6e2d6, xf(0, 2.3, 0)),
-    part(new THREE.BoxGeometry(0.43, 0.08, 0.43), 0x2b2b2b, xf(0, 1.3, 0, 0, 0.3)),
-    part(new THREE.BoxGeometry(0.38, 0.07, 0.38), 0x2b2b2b, xf(0, 2.4, 0, 0, 1.1)),
-    part(new THREE.IcosahedronGeometry(1.4, 0), 0x8db548, xf(0, 4.7, 0)),
-    part(new THREE.IcosahedronGeometry(1.0, 0), 0x9cc455, xf(0.5, 5.6, 0.2)),
+    part(new THREE.CylinderGeometry(0.15, 0.21, 4.6, 6), 0xe6e2d6, xf(0, 2.3, 0), TEX.BIRCH),
+    part(new THREE.BoxGeometry(0.43, 0.08, 0.43), 0x2b2b2b, xf(0, 1.3, 0, 0, 0.3), TEX.BIRCH),
+    part(new THREE.BoxGeometry(0.38, 0.07, 0.38), 0x2b2b2b, xf(0, 2.4, 0, 0, 1.1), TEX.BIRCH),
+    part(new THREE.IcosahedronGeometry(1.4, 0), 0x8db548, xf(0, 4.7, 0), TEX.LEAVES),
+    part(new THREE.IcosahedronGeometry(1.0, 0), 0x9cc455, xf(0.5, 5.6, 0.2), TEX.LEAVES),
   ]);
-  L.rock = part(new THREE.DodecahedronGeometry(1, 0), 0x86847e, xf(0, 0.25, 0));
+  L.rock = part(new THREE.DodecahedronGeometry(1, 0), 0x86847e, xf(0, 0.25, 0), TEX.STONE);
   L.bush = mergeParts([
-    part(new THREE.IcosahedronGeometry(0.75, 0), 0x2d6a2a, xf(0, 0.55, 0)),
-    part(new THREE.IcosahedronGeometry(0.55, 0), 0x36762e, xf(0.45, 0.45, 0.2)),
-    part(new THREE.IcosahedronGeometry(0.5, 0), 0x2f6e2b, xf(-0.4, 0.42, -0.25)),
+    part(new THREE.IcosahedronGeometry(0.75, 0), 0x2d6a2a, xf(0, 0.55, 0), TEX.LEAVES),
+    part(new THREE.IcosahedronGeometry(0.55, 0), 0x36762e, xf(0.45, 0.45, 0.2), TEX.LEAVES),
+    part(new THREE.IcosahedronGeometry(0.5, 0), 0x2f6e2b, xf(-0.4, 0.42, -0.25), TEX.LEAVES),
   ]);
   const berryParts = [];
   const br = mulberry32(77);
@@ -107,15 +112,15 @@ function buildLibrary() {
   }
   L.berries = mergeParts(berryParts);
   L.stick = mergeParts([
-    part(new THREE.CylinderGeometry(0.045, 0.06, 1.3, 5), 0x7a5532, xf(0, 0.06, 0, 0, 0, Math.PI / 2)),
-    part(new THREE.CylinderGeometry(0.03, 0.035, 0.45, 4), 0x7a5532, xf(0.2, 0.06, 0.15, 0, 0.8, Math.PI / 2)),
+    part(new THREE.CylinderGeometry(0.045, 0.06, 1.3, 5), 0x7a5532, xf(0, 0.06, 0, 0, 0, Math.PI / 2), TEX.BARK),
+    part(new THREE.CylinderGeometry(0.03, 0.035, 0.45, 4), 0x7a5532, xf(0.2, 0.06, 0.15, 0, 0.8, Math.PI / 2), TEX.BARK),
   ]);
-  L.stone = part(new THREE.DodecahedronGeometry(0.22, 0), 0x9a9893, xf(0, 0.1, 0, 0, 0, 0, 1, 0.7, 1));
+  L.stone = part(new THREE.DodecahedronGeometry(0.22, 0), 0x9a9893, xf(0, 0.1, 0, 0, 0, 0, 1, 0.7, 1), TEX.STONE);
   const fern = [];
   for (let i = 0; i < 6; i++) {
     const a = (i / 6) * Math.PI * 2;
     fern.push(part(new THREE.ConeGeometry(0.11, 0.95, 4), 0x3f7f35,
-      xf(Math.cos(a) * 0.3, 0.32, -Math.sin(a) * 0.3, 0, a, -1.0, 1, 1, 0.35)));
+      xf(Math.cos(a) * 0.3, 0.32, -Math.sin(a) * 0.3, 0, a, -1.0, 1, 1, 0.35), TEX.LEAVES));
   }
   L.fern = mergeParts(fern);
   L.mushroom = mergeParts([
@@ -125,13 +130,13 @@ function buildLibrary() {
     part(new THREE.ConeGeometry(0.13, 0.1, 8), 0x8a4d26, xf(0.18, 0.18, 0.08)),
   ]);
   L.grass = mergeParts([
-    part(new THREE.ConeGeometry(0.05, 0.6, 3), 0x5b8f3a, xf(0, 0.3, 0, 0.15, 0, 0.1)),
-    part(new THREE.ConeGeometry(0.05, 0.5, 3), 0x66a043, xf(0.1, 0.25, 0.05, -0.2, 0, -0.25)),
-    part(new THREE.ConeGeometry(0.05, 0.45, 3), 0x4f8234, xf(-0.08, 0.22, -0.06, 0.25, 0, 0.3)),
+    part(new THREE.ConeGeometry(0.05, 0.6, 3), 0x5b8f3a, xf(0, 0.3, 0, 0.15, 0, 0.1), TEX.GRASS),
+    part(new THREE.ConeGeometry(0.05, 0.5, 3), 0x66a043, xf(0.1, 0.25, 0.05, -0.2, 0, -0.25), TEX.GRASS),
+    part(new THREE.ConeGeometry(0.05, 0.45, 3), 0x4f8234, xf(-0.08, 0.22, -0.06, 0.25, 0, 0.3), TEX.GRASS),
   ]);
   L.flower = mergeParts([
-    part(new THREE.CylinderGeometry(0.015, 0.015, 0.35, 3), 0x4f8234, xf(0, 0.17, 0)),
-    part(new THREE.IcosahedronGeometry(0.07, 0), 0xffffff, xf(0, 0.37, 0)),
+    part(new THREE.CylinderGeometry(0.015, 0.015, 0.35, 3), 0x4f8234, xf(0, 0.17, 0), TEX.GRASS),
+    part(new THREE.IcosahedronGeometry(0.07, 0), 0xffffff, xf(0, 0.37, 0), TEX.FLAT),
   ]);
   return L;
 }
@@ -172,8 +177,8 @@ export class World {
     this.structures = []; // {x, z, col}
     this.falling = [];
     this.lib = buildLibrary();
-    this.objMat = new THREE.MeshLambertMaterial({ vertexColors: true });
-    this.terrainMat = new THREE.MeshLambertMaterial({ vertexColors: true });
+    this.objMat = pixelate(new THREE.MeshLambertMaterial({ vertexColors: true }), null, 1.6);
+    this.terrainMat = pixelate(new THREE.MeshLambertMaterial({ vertexColors: true }), null, 1);
     this.lastCx = null;
 
     const wg = new THREE.PlaneGeometry(1200, 1200, 1, 1);
@@ -181,6 +186,7 @@ export class World {
     this.water = new THREE.Mesh(wg, new THREE.MeshPhongMaterial({
       color: 0x2b6a86, transparent: true, opacity: 0.78, shininess: 90, specular: 0x88aacc, depthWrite: false,
     }));
+    pixelate(this.water.material, TEX.WATER, 0.5);
     this.water.position.y = WATER_LEVEL;
     this.water.renderOrder = 1;
     scene.add(this.water);
@@ -230,6 +236,15 @@ export class World {
       if (h > 46 + v * 6) out.copy(SNOW);
     }
     return out;
+  }
+
+  groundTex(x, z, h, ny) {
+    if (h < 1.3) return h < WATER_LEVEL - 2.5 ? TEX.DIRT : TEX.SAND;
+    const v = this.nDetail.noise(x * 0.05, z * 0.05) * 0.5 + 0.5;
+    if (h > 46 + v * 6) return TEX.SNOW;
+    if (ny < 0.62 || h > 31) return TEX.STONE;
+    if (ny < 0.78) return TEX.DIRT;
+    return TEX.GRASS;
   }
 
   mapColor(x, z) {
@@ -306,6 +321,7 @@ export class World {
     const pos = geo.attributes.position;
     const nor = geo.attributes.normal;
     const col = new Float32Array(pos.count * 3);
+    const tid = new Float32Array(pos.count);
     for (let i = 0; i < pos.count; i++) {
       const x = pos.getX(i) + ox + CHUNK / 2;
       const z = pos.getZ(i) + oz + CHUNK / 2;
@@ -315,8 +331,10 @@ export class World {
       nor.setXYZ(i, n.nx, n.ny, n.nz);
       this.groundColor(x, z, h, n.ny, _c);
       col[i * 3] = _c.r; col[i * 3 + 1] = _c.g; col[i * 3 + 2] = _c.b;
+      tid[i] = this.groundTex(x, z, h, n.ny);
     }
     geo.setAttribute('color', new THREE.BufferAttribute(col, 3));
+    geo.setAttribute('texId', new THREE.BufferAttribute(tid, 1));
     geo.computeBoundingSphere();
     geo.computeBoundingBox();
     const terrain = new THREE.Mesh(geo, this.terrainMat);
@@ -460,7 +478,16 @@ export class World {
       const c = OBJ[o.type].col;
       if (c > 0) push(o.x, o.z, c * o.s);
     });
-    for (const s of this.structures) if (s.col > 0) push(s.x, s.z, s.col);
+    for (const s of this.structures) {
+      if (s.seg) {
+        const [ax, az, bx, bz] = s.seg;
+        const ex = bx - ax, ez = bz - az;
+        const t = Math.max(0, Math.min(1, ((p.x - ax) * ex + (p.z - az) * ez) / (ex * ex + ez * ez)));
+        push(ax + ex * t, az + ez * t, s.col);
+      } else if (s.col > 0) {
+        push(s.x, s.z, s.col);
+      }
+    }
   }
 
   setInstance(im, k, matrix) {

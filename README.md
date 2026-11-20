@@ -44,18 +44,44 @@ Empfohlen: Desktop-Browser (Chrome, Firefox, Edge) mit Maus und Tastatur.
 - Gefällte Bäume, abgebaute Felsen und gepflückte Sträucher wachsen nach einigen Tagen nach.
 - Das Spiel speichert automatisch im Browser (localStorage).
 
+## Grafik
+
+Alle Oberflächen haben Pixeltexturen im 16×16-Stil: Gras, Erde, Sand, Stein, Schnee, Rinde,
+Birkenrinde, Blätter, Nadeln, Holzbretter, Fell und Wasser. Die Texturen werden beim Start
+erzeugt, es gibt keine Bilddateien.
+
 ## Herstellen
+
+Manche Rezepte brauchen **Seil** (3 Fasern), die Pilzsuppe kann nur direkt an einem
+brennenden Lagerfeuer gekocht werden.
 
 | Gegenstand | Kosten | Nutzen |
 |---|---|---|
-| 🪓 Steinaxt | 3 Holz, 2 Stein, 2 Fasern | Bäume fällen |
+| 🪢 Seil | 3 Fasern | Material für viele Rezepte |
+| ➶ 5 Pfeile | 2 Holz, 1 Stein, 1 Fasern | Munition für den Bogen |
+| 🪓 Steinaxt | 3 Holz, 2 Stein, 2 Fasern | Bäume fällen, Bauten abreißen |
 | ⛏️ Spitzhacke | 3 Holz, 3 Stein, 2 Fasern | Felsen abbauen |
+| 🏏 Holzkeule | 5 Holz | Kräftige Schlagwaffe |
 | 🔱 Speer | 4 Holz, 1 Stein, 3 Fasern | Starke Waffe mit Reichweite |
+| 🏹 Bogen | 3 Holz, 2 Seil | Fernkampf mit Pfeilen |
+| 🎣 Angel | 3 Holz, 1 Seil | Fische fangen |
 | 🔥 Fackel | 1 Holz, 2 Fasern | Licht und etwas Wärme |
-| 🏕️ Lagerfeuer | 5 Holz, 4 Stein | Wärme, Licht, Kochen, Schutz |
 | 🧴 Feldflasche | 1 Fell, 2 Fasern | 3 Portionen Wasser tragen |
 | 🧥 Fellmantel | 4 Fell, 4 Fasern | Halbiert die Auskühlung |
+| 🦺 Fellrüstung | 5 Fell, 2 Seil | 40 % weniger Schaden durch Wölfe |
+| 🏕️ Lagerfeuer | 5 Holz, 4 Stein | Wärme, Licht, Braten, Schutz |
 | ⛺ Unterschlupf | 10 Holz, 6 Fasern, 2 Fell | Schlafen, Wiedereinstiegspunkt |
+| 🚧 Palisade | 4 Holz, 1 Seil | Zaun, durch den keine Tiere kommen |
+| 🪤 Hasenfalle | 3 Holz, 2 Seil | Fängt mit der Zeit Hasen (Fleisch + Fell) |
+| 🩹 Verband | 4 Fasern | Heilt 30 Gesundheit |
+| 🧃 Beerensaft | 5 Beeren, 1 Wasser | Löscht viel Durst |
+| 🍲 Pilzsuppe | 3 Pilze, 1 Wasser, am Feuer | Sättigt, löscht Durst, wärmt |
+
+**Angeln:** Angel auswählen, mit Linksklick ins Wasser werfen und warten, bis der Schwimmer
+abtaucht. Dann sofort noch einmal klicken. Rohen Fisch am Lagerfeuer braten (E).
+
+**Abreißen:** Mit ausgerüsteter Steinaxt dreimal auf einen Bau schlagen. Ein Teil des Holzes
+kommt zurück.
 
 **Tipp für den Start:** Äste (Holz), kleine Steine und Farne (Fasern) liegen überall am Boden.
 Damit baust du zuerst die Axt – und vor Einbruch der Nacht ein Lagerfeuer.
@@ -70,7 +96,8 @@ src/world.js      Prozedurales Terrain, Wald, Objekte, Chunks
 src/env.js        Tag/Nacht, Himmel, Licht
 src/player.js     Bewegung, Physik, Schwimmen
 src/animals.js    Tiere und ihr Verhalten
-src/models.js     Lagerfeuer, Unterschlupf, Gegenstände in der Hand
+src/models.js     Bauten, Pfeile und Gegenstände in der Hand
+src/textures.js   16×16-Pixeltexturen
 src/items.js      Gegenstände und Rezepte
 src/audio.js      Synthetische Klänge (WebAudio)
 src/ui.js         HUD, Minikarte, Inventar

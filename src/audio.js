@@ -87,6 +87,8 @@ export class Sound {
       case 'growl': this.tone('sawtooth', 90, 70, 0.4, 0.12); this.burst('lowpass', 300, 0.35, 0.2); break;
       case 'fall': this.burst('lowpass', 250, 0.6, 0.6); this.tone('sine', 80, 35, 0.5, 0.4, 0.05); break;
       case 'place': this.tone('sine', 200, 120, 0.15, 0.3); this.burst('lowpass', 600, 0.1, 0.2); break;
+      case 'bow': this.tone('triangle', 320, 140, 0.18, 0.25); this.burst('bandpass', 2000, 0.08, 0.15, 0, 1.5); break;
+      case 'splash': this.burst('lowpass', 1400, 0.35, 0.35); this.tone('sine', 500, 200, 0.15, 0.08); break;
       case 'sizzle': this.burst('highpass', 3000, 0.6, 0.18); break;
       case 'fire': this.burst('highpass', 1800 + Math.random() * 2000, 0.03, 0.08 + Math.random() * 0.08); break;
       case 'chirp': {

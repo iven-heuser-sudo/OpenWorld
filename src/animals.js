@@ -1,6 +1,7 @@
 // Tiere: Rehe und Hasen (scheu), Wölfe (feindlich, besonders nachts).
 import * as THREE from 'three';
 import { WATER_LEVEL } from './world.js';
+import { TEX, pixelMat } from './textures.js';
 
 export const ANIMALS = {
   deer:   { name: 'Reh',  hp: 6, walk: 1.6, run: 8.0, drops: { rawMeat: 3, hide: 1 }, radius: 0.6, height: 1.7, passive: true },
@@ -9,7 +10,8 @@ export const ANIMALS = {
 };
 
 function box(parent, mats, w, h, d, color, x, y, z, emissive) {
-  const mat = new THREE.MeshLambertMaterial({ color, emissive: emissive || 0x000000 });
+  const small = Math.max(w, h, d) < 0.12;
+  const mat = pixelMat(color, small ? TEX.FLAT : TEX.FUR, 2.5, { emissive: emissive || 0x000000 });
   mats.push(mat);
   const m = new THREE.Mesh(new THREE.BoxGeometry(w, h, d), mat);
   m.position.set(x, y, z);

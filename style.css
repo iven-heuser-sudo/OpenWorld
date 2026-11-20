@@ -63,7 +63,7 @@ html, body {
 
 #bottom { position: absolute; left: 50%; bottom: 16px; transform: translateX(-50%); display: flex; flex-direction: column; align-items: center; gap: 6px; }
 #held-name { font-size: 13px; font-weight: 600; text-shadow: 0 1px 3px #000; }
-#hotbar { display: flex; gap: 5px; }
+#hotbar { display: flex; gap: 5px; flex-wrap: wrap; justify-content: center; max-width: min(760px, 62vw); }
 .slot {
   position: relative; width: 52px; height: 52px; border-radius: 8px;
   background: rgba(12,18,14,.6); border: 2px solid rgba(255,255,255,.15);
@@ -187,3 +187,6 @@ body.touch #prompt { z-index: 2; }
   body.touch .slot .icon { font-size: 20px; }
   body.touch #bottom { left: 40%; }
 }
+
+.cat { font-size: 12px; text-transform: uppercase; letter-spacing: .08em; color: #d8c27a; margin: 10px 0 2px; }
+.cat:first-child { margin-top: 0; }

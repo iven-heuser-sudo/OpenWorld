@@ -8,7 +8,7 @@ import { Particles } from './particles.js';
 import { Sound } from './audio.js';
 import { UI } from './ui.js';
 import { ITEMS, RECIPES, HOTBAR_ORDER, FOOD_PRIORITY } from './items.js';
-import { makeCampfire, makeShelter, makeViewModels, makeGhost } from './models.js';
+import { STRUCTURE_BUILDERS, PALISADE_HALF, makeViewModels, makeGhost, makeArrow, makeBobber } from './models.js';
 import { TouchControls, isTouchDevice } from './touch.js';
 
 const SAVE_KEY = 'waldlaeufer-save-v1';
@@ -21,6 +21,9 @@ const MAX_LIGHTS = 4;
 const VM_POS = new THREE.Vector3(0.3, -0.3, -0.62);
 
 const _v = new THREE.Vector3();
+const _v2 = new THREE.Vector3();
+// Holzanteil, der beim Abreißen eines Baus zurückkommt
+const REFUND = { campfire: { wood: 2, stone: 2 }, shelter: { wood: 5 }, palisade: { wood: 2 }, trap: { wood: 1 } };
 const FULL_STATS = () => ({ health: 100, hunger: 100, thirst: 100, warmth: 100, stamina: 100 });
 
 class Game {
@@ -66,7 +69,13 @@ class Game {
       this.lights.push(l);
     }
 
-    this.ghosts = { campfire: makeGhost(makeCampfire), shelter: makeGhost(makeShelter) };
+    this.ghosts = {};
+    for (const k in STRUCTURE_BUILDERS) this.ghosts[k] = makeGhost(STRUCTURE_BUILDERS[k]);
+    this.arrows = [];
+    this.fishing = null;
+    this.bobber = makeBobber();
+    this.bobber.visible = false;
+    this.scene.add(this.bobber);
     for (const k in this.ghosts) { this.ghosts[k].visible = false; this.scene.add(this.ghosts[k]); }
 
     this.sound = new Sound();
@@ -108,7 +117,10 @@ class Game {
       this.world.dispose();
       this.animals.clear();
       for (const s of this.structures) this.scene.remove(s.mesh);
+      for (const a of this.arrows) this.scene.remove(a.mesh);
     }
+    this.arrows = [];
+    this.stopFishing();
     this.seed = seed;
     this.world = new World(this.scene, seed);
     this.structures = [];
@@ -184,7 +196,7 @@ class Game {
     this.spawn = d.spawn;
     this.spawnIsShelter = !!d.spawnIsShelter;
     this.world.removed = new Map(d.removed || []);
-    for (const s of d.structures || []) this.addStructure(s.type, s.x, s.z, s.rot, s.fuel);
+    for (const s of d.structures || []) this.addStructure(s.type, s.x, s.z, s.rot, s.fuel, s);
     const p = d.player;
     this.player.pos.set(p.x, p.y, p.z);
     this.player.yaw = p.yaw;
@@ -202,7 +214,7 @@ class Game {
       spawn: this.spawn, spawnIsShelter: this.spawnIsShelter,
       player: { x: p.pos.x, y: p.pos.y, z: p.pos.z, yaw: p.yaw, pitch: p.pitch },
       removed: [...this.world.removed],
-      structures: this.structures.map(s => ({ type: s.type, x: s.x, z: s.z, rot: s.rot, fuel: s.fuel })),
+      structures: this.structures.map(s => ({ type: s.type, x: s.x, z: s.z, rot: s.rot, fuel: s.fuel, catchT: s.catchT, caught: s.caught })),
     };
     try { localStorage.setItem(SAVE_KEY, JSON.stringify(data)); } catch { /* Speicher voll oder gesperrt */ }
   }
@@ -340,9 +352,11 @@ class Game {
     const it = ITEMS[id];
     if (it.unique && this.inv[id]) return;
     for (const [k, n] of Object.entries(r.needs)) if ((this.inv[k] || 0) < n) return;
+    if (r.fire && !this.playerNearFire(4)) { this.hint('needfire', 'Das geht nur direkt an einem brennenden Lagerfeuer.'); return; }
     for (const [k, n] of Object.entries(r.needs)) this.take(k, n);
-    this.add(id, 1, true);
-    this.ui.message(`${it.icon} ${it.name} hergestellt!`, 'good');
+    const out = r.out || 1;
+    this.add(id, out, true);
+    this.ui.message(`${it.icon} ${out > 1 ? out + ' ' : ''}${it.name} hergestellt!`, 'good');
     this.sound.play('craft');
     if (it.tool || it.place) this.selected = id;
     if (id === 'flask') { this.ui.message('Fülle die Feldflasche am Wasser mit R.', 'info'); }
@@ -358,6 +372,9 @@ class Game {
     if (it.place) return this.place();
     if (it.food) { this.attackCD = 0.5; return this.eat(sel); }
 
+    if (sel === 'bow') return this.shootArrow();
+    if (sel === 'rod') return this.useRod();
+
     const t = this.target;
     if (t && t.kind === 'obj' && ['pickup', 'bush'].includes(OBJ[t.ref.type].kind)) return this.interact();
 
@@ -368,15 +385,16 @@ class Game {
     const p = this.player.pos;
 
     if (t.kind === 'animal') {
-      const a = t.ref;
-      const drops = this.animals.damage(a, it.damage, p.x, p.z);
-      this.sound.play('hit');
-      this.particles.emit(a.x, a.y + a.def.height * 0.6, a.z, 0xa01818, 8, 3);
-      if (drops) {
-        const parts = [];
-        for (const [k, n] of Object.entries(drops)) { this.add(k, n, true); parts.push(`+${n} ${ITEMS[k].name}`); }
-        this.ui.message(`${a.def.name} erlegt: ${parts.join(', ')}`, 'good');
-      }
+      this.hitAnimal(t.ref, it.damage);
+      return;
+    }
+    if (t.kind === 'struct') {
+      const st = t.ref;
+      if (sel !== 'axe') { this.hint('demolish', 'Mit der Steinaxt kannst du Bauten abreißen.', 'info'); return; }
+      st.hp = (st.hp ?? 3) - 1;
+      this.sound.play('chop');
+      this.particles.emit(st.x, st.y + 0.5, st.z, 0xb08a5a, 8, 3);
+      if (st.hp <= 0) this.removeStructure(st);
       return;
     }
     if (t.kind !== 'obj') return;
@@ -414,6 +432,141 @@ class Game {
     }
   }
 
+  hitAnimal(a, damage) {
+    const p = this.player.pos;
+    const drops = this.animals.damage(a, damage, p.x, p.z);
+    this.sound.play('hit');
+    this.particles.emit(a.x, a.y + a.def.height * 0.6, a.z, 0xa01818, 8, 3);
+    if (drops) {
+      const parts = [];
+      for (const [k, n] of Object.entries(drops)) { this.add(k, n, true); parts.push(`+${n} ${ITEMS[k].name}`); }
+      this.ui.message(`${a.def.name} erlegt: ${parts.join(', ')}`, 'good');
+    }
+  }
+
+  // ---------- Bogen ----------
+
+  shootArrow() {
+    if (!this.inv.arrow) { this.hint('noarrow', 'Keine Pfeile! Stelle welche her (Holz, Stein, Fasern).'); this.attackCD = 0.4; return; }
+    this.take('arrow');
+    this.attackCD = 0.8;
+    this.swingT = 0.0001;
+    this.sound.play('bow');
+    const dir = this.camera.getWorldDirection(_v2).clone();
+    const mesh = makeArrow();
+    const pos = this.camera.position.clone().addScaledVector(dir, 0.6);
+    mesh.position.copy(pos);
+    this.scene.add(mesh);
+    this.arrows.push({ mesh, pos, vel: dir.multiplyScalar(42), life: 6, stuck: false });
+  }
+
+  updateArrows(dt) {
+    const w = this.world;
+    for (let i = this.arrows.length - 1; i >= 0; i--) {
+      const ar = this.arrows[i];
+      ar.life -= dt;
+      if (ar.life <= 0) { this.scene.remove(ar.mesh); this.arrows.splice(i, 1); continue; }
+      if (ar.stuck) continue;
+      const steps = 3;
+      for (let k = 0; k < steps && !ar.stuck; k++) {
+        const h = dt / steps;
+        ar.vel.y -= 9.8 * h;
+        ar.pos.addScaledVector(ar.vel, h);
+        for (const a of this.animals.list) {
+          if (a.dead) continue;
+          const cy = a.y + a.def.height * 0.55;
+          if (Math.hypot(ar.pos.x - a.x, ar.pos.y - cy, ar.pos.z - a.z) < a.def.radius + 0.3) {
+            this.hitAnimal(a, 4.5);
+            ar.life = 0;
+            ar.stuck = true;
+            break;
+          }
+        }
+        if (ar.stuck) break;
+        if (ar.pos.y < w.height(ar.pos.x, ar.pos.z)) { ar.stuck = true; ar.life = 8; break; }
+        w.forEachNear(ar.pos.x, ar.pos.z, o => {
+          const def = OBJ[o.type];
+          if (ar.stuck || def.col <= 0) return;
+          if (Math.hypot(ar.pos.x - o.x, ar.pos.z - o.z) < def.col * o.s + 0.05 && ar.pos.y < o.y + def.top * o.s * o.sy) {
+            ar.stuck = true; ar.life = 8;
+          }
+        });
+      }
+      ar.mesh.position.copy(ar.pos);
+      if (!ar.stuck) ar.mesh.lookAt(_v2.copy(ar.pos).sub(ar.vel));
+    }
+  }
+
+  // ---------- Angeln ----------
+
+  useRod() {
+    this.attackCD = 0.5;
+    const f = this.fishing;
+    if (f) {
+      if (f.bite > 0) {
+        this.add('rawFish', 1, true);
+        this.ui.message('🐟 Du hast einen Fisch gefangen!', 'good');
+        this.sound.play('splash');
+        this.particles.emit(f.x, WATER_LEVEL + 0.1, f.z, 0x9ad0ff, 12, 2.5);
+      } else {
+        this.hint('reel', 'Angel eingeholt.', 'info');
+      }
+      this.stopFishing();
+      this.swingT = 0.0001;
+      return;
+    }
+    if (!this.target || this.target.kind !== 'water' || !this.waterPoint) {
+      this.hint('nowater', 'Ziele mit der Angel auf das Wasser.', 'info');
+      return;
+    }
+    this.swingT = 0.0001;
+    this.sound.play('swing');
+    const p = this.player.pos;
+    this.fishing = { x: this.waterPoint.x, z: this.waterPoint.z, sx: p.x, sz: p.z, wait: 3 + Math.random() * 6, bite: 0 };
+    this.bobber.position.set(this.fishing.x, WATER_LEVEL, this.fishing.z);
+    this.bobber.visible = true;
+    this.hint('cast', 'Angel ausgeworfen … warte, bis der Schwimmer abtaucht, dann klicken!', 'info');
+  }
+
+  stopFishing() {
+    this.fishing = null;
+    if (this.bobber) this.bobber.visible = false;
+  }
+
+  updateFishing(dt) {
+    const f = this.fishing;
+    if (!f) return;
+    const p = this.player.pos;
+    if (this.selected !== 'rod' || Math.hypot(p.x - f.sx, p.z - f.sz) > 1.5) { this.stopFishing(); return; }
+    const t = performance.now() / 1000;
+    if (f.bite > 0) {
+      f.bite -= dt;
+      this.bobber.position.y = WATER_LEVEL - 0.12 + Math.sin(t * 25) * 0.04;
+      if (f.bite <= 0) {
+        this.hint('escaped', 'Der Fisch ist entwischt …', 'bad');
+        f.wait = 3 + Math.random() * 6;
+      }
+    } else {
+      f.wait -= dt;
+      this.bobber.position.y = WATER_LEVEL + Math.sin(t * 2.5) * 0.02;
+      if (f.wait <= 0) {
+        f.bite = 1.3;
+        this.sound.play('splash');
+        this.particles.emit(f.x, WATER_LEVEL + 0.05, f.z, 0x9ad0ff, 6, 1.5);
+      }
+    }
+  }
+
+  removeStructure(st) {
+    this.scene.remove(st.mesh);
+    this.structures.splice(this.structures.indexOf(st), 1);
+    const refund = REFUND[st.type] || {};
+    const parts = Object.entries(refund).map(([k, n]) => { this.add(k, n, true); return `+${n} ${ITEMS[k].name}`; });
+    this.ui.message(`${ITEMS[st.type].name} abgerissen${parts.length ? ': ' + parts.join(', ') : ''}`, 'info');
+    if (st.type === 'shelter' && this.spawnIsShelter && this.spawn.x === st.x && this.spawn.z === st.z) this.spawnIsShelter = false;
+    this.particles.emit(st.x, st.y + 0.6, st.z, 0x8a6440, 20, 4);
+  }
+
   interact() {
     const t = this.target;
     if (!t || this.sleepT !== null) return;
@@ -440,16 +593,28 @@ class Game {
     } else if (t.kind === 'struct') {
       const st = t.ref;
       if (st.type === 'campfire') {
-        if (!this.inv.rawMeat) { this.hint('nomeat', 'Du hast kein rohes Fleisch zum Braten.', 'info'); return; }
+        const raw = this.inv.rawMeat ? 'rawMeat' : this.inv.rawFish ? 'rawFish' : null;
+        if (!raw) { this.hint('nomeat', 'Du hast kein rohes Fleisch und keinen rohen Fisch zum Braten.', 'info'); return; }
         if (st.fuel <= 0) { this.hint('fireout', 'Das Feuer ist aus – lege Holz nach (R).'); return; }
-        this.take('rawMeat');
-        this.add('cookedMeat', 1);
+        this.take(raw);
+        this.add(raw === 'rawMeat' ? 'cookedMeat' : 'cookedFish', 1);
         this.sound.play('sizzle');
         this.particles.emit(st.x, st.y + 0.7, st.z, 0xdddddd, 6, 1.2, -1);
+      } else if (st.type === 'trap') {
+        if (!st.caught) { this.hint('trapempty', 'In der Falle ist noch nichts – schau später wieder vorbei.', 'info'); return; }
+        st.caught = false;
+        st.catchT = 120 + Math.random() * 180;
+        this.add('rawMeat', 1, true);
+        this.add('hide', 1, true);
+        this.ui.message('Hase aus der Falle: +1 Rohes Fleisch, +1 Fell', 'good');
+        this.sound.play('pickup');
+      } else if (st.type === 'palisade') {
+        this.hint('demolish', 'Mit der Steinaxt kannst du Bauten abreißen.', 'info');
       } else {
         this.sleep(st);
       }
     } else if (t.kind === 'water') {
+      if (t.far) return;
       if (s.thirst >= 99) { this.hint('full', 'Du hast keinen Durst.', 'info'); return; }
       s.thirst = Math.min(100, s.thirst + 20);
       this.sound.play('drink');
@@ -471,6 +636,7 @@ class Game {
       this.particles.emit(st.x, st.y + 0.5, st.z, 0xffa030, 12, 2.5, 2);
       this.ui.message(wasOut ? 'Das Feuer brennt wieder.' : 'Holz nachgelegt.', 'good');
     } else if (t.kind === 'water') {
+      if (t.far) return;
       if (!this.inv.flask) { this.hint('noflask', 'Du brauchst eine Feldflasche (Fell + Fasern).', 'info'); return; }
       const have = this.inv.water || 0;
       if (have >= 3) { this.hint('flaskfull', 'Die Feldflasche ist voll.', 'info'); return; }
@@ -484,16 +650,22 @@ class Game {
     const f = ITEMS[id].food;
     if (!this.inv[id]) return;
     const s = this.stats;
-    if (!f.thirst && s.hunger > 97) { this.hint('full', 'Du bist satt.', 'info'); return; }
-    if (!f.hunger && s.thirst > 97) { this.hint('full', 'Du hast keinen Durst.', 'info'); return; }
+    const useful = (f.hunger > 0 && s.hunger < 97) || (f.thirst > 0 && s.thirst < 97) ||
+      (f.health > 0 && s.health < 99) || (f.warmth > 0 && s.warmth < 90);
+    if (!useful) {
+      this.hint('full', id === 'bandage' ? 'Du bist nicht verletzt.' : f.hunger > 0 ? 'Du bist satt.' : 'Du hast keinen Durst.', 'info');
+      return;
+    }
     this.take(id);
     s.hunger = Math.min(100, s.hunger + (f.hunger || 0));
     s.thirst = Math.min(100, s.thirst + (f.thirst || 0));
+    s.warmth = Math.min(100, s.warmth + (f.warmth || 0));
     s.health = Math.max(1, Math.min(100, s.health + (f.health || 0)));
-    this.sound.play(id === 'water' ? 'drink' : 'eat');
+    const drink = id === 'water' || id === 'juice';
+    this.sound.play(drink ? 'drink' : id === 'bandage' ? 'craft' : 'eat');
     this.swingT = 0.0001;
-    if (id === 'rawMeat') this.hint('raw', 'Rohes Fleisch bekommt dir nicht gut … brate es am Feuer!');
-    else this.hint('eat' + id, `${ITEMS[id].name} ${id === 'water' ? 'getrunken' : 'gegessen'}.`, 'good');
+    if (id === 'rawMeat' || id === 'rawFish') this.hint('raw', 'Roh bekommt dir das nicht gut … brate es am Feuer!');
+    else this.hint('eat' + id, `${ITEMS[id].name} ${ITEMS[id].verb || (drink ? 'getrunken' : 'gegessen')}.`, 'good');
   }
 
   quickEat() {
@@ -504,23 +676,36 @@ class Game {
 
   place() {
     const sel = this.selected;
+    if (!this.inv[sel]) return;
     if (!this.ghostValid) { this.hint('noplace', 'Hier kann nicht gebaut werden.'); return; }
     const g = this.ghosts[sel];
     this.take(sel);
     this.addStructure(sel, g.position.x, g.position.z, g.rotation.y);
     this.sound.play('place');
     this.attackCD = 0.5;
-    if (sel === 'campfire') this.ui.message('Lagerfeuer entzündet! Mit R legst du Holz nach.', 'good');
-    else this.ui.message('Unterschlupf gebaut! Mit E schläfst du nachts und wachst hier wieder auf.', 'good');
+    const msg = {
+      campfire: 'Lagerfeuer entzündet! Mit R legst du Holz nach.',
+      shelter: 'Unterschlupf gebaut! Mit E schläfst du nachts und wachst hier wieder auf.',
+      palisade: 'Palisade gebaut! Tiere kommen hier nicht durch.',
+      trap: 'Hasenfalle aufgestellt. Schau in ein paar Minuten nach (E).',
+    };
+    this.ui.message(msg[sel], 'good');
   }
 
-  addStructure(type, x, z, rot = 0, fuel) {
-    const mesh = type === 'campfire' ? makeCampfire() : makeShelter();
+  addStructure(type, x, z, rot = 0, fuel, extra = {}) {
+    const mesh = STRUCTURE_BUILDERS[type]();
     const y = this.world.height(x, z);
     mesh.position.set(x, y, z);
     mesh.rotation.y = rot;
     this.scene.add(mesh);
-    const s = { type, x, z, y, rot, mesh, fuel: fuel ?? (type === 'campfire' ? FIRE_START : 0), col: type === 'campfire' ? 0.75 : 0 };
+    const s = { type, x, z, y, rot, mesh, fuel: fuel ?? (type === 'campfire' ? FIRE_START : 0), col: 0 };
+    if (type === 'campfire') s.col = 0.75;
+    if (type === 'trap') { s.col = 0.45; s.catchT = extra.catchT ?? 120 + Math.random() * 180; s.caught = !!extra.caught; }
+    if (type === 'palisade') {
+      const dx = Math.cos(rot) * (PALISADE_HALF - 0.05), dz = -Math.sin(rot) * (PALISADE_HALF - 0.05);
+      s.seg = [x - dx, z - dz, x + dx, z + dz];
+      s.col = 0.22;
+    }
     this.structures.push(s);
     return s;
   }
@@ -556,7 +741,10 @@ class Game {
       s.health = Math.min(100, s.health + 35);
       s.warmth = Math.max(s.warmth, 70);
       s.stamina = 100;
-      for (const f of this.structures) if (f.type === 'campfire') f.fuel = Math.max(0, f.fuel - skipped);
+      for (const f of this.structures) {
+        if (f.type === 'campfire') f.fuel = Math.max(0, f.fuel - skipped);
+        if (f.type === 'trap') f.catchT -= skipped;
+      }
       for (const a of this.animals.list) if (a.type === 'wolf') a.dead = true, a.deadT = 3;
       this.ui.message(`Du bist ausgeschlafen. Tag ${Math.floor(this.time) + 1} beginnt.`, 'good');
       this.warned.night = false;
@@ -567,6 +755,7 @@ class Game {
 
   damagePlayer(amount, cause) {
     if (this.dead || this.sleepT !== null || this.state !== 'playing') return;
+    if (this.inv.armor && /Wolf/.test(cause)) amount *= 0.6;
     this.stats.health -= amount;
     this.lastCause = cause;
     this.ui.flashDamage();
@@ -694,6 +883,8 @@ class Game {
     this.animals.update(dt, this);
     this.particles.update(dt);
     this.updateStructures(dt);
+    this.updateArrows(dt);
+    this.updateFishing(dt);
     this.updateStats(dt);
     if (this.sleepT !== null) this.updateSleep(dt);
     this.updateTarget();
@@ -703,7 +894,7 @@ class Game {
     this.updateAmbience(dt);
 
     this.attackCD -= dt;
-    if (this.mouseDown && (this.locked || this.touch) && this.attackCD <= 0 && ITEMS[this.selected].tool) this.primary();
+    if (this.mouseDown && (this.locked || this.touch) && this.attackCD <= 0 && ITEMS[this.selected].tool && this.selected !== 'rod') this.primary();
 
     if (prevFrac < 0.75 && frac >= 0.75) {
       this.ui.message('Die Nacht bricht herein … Wölfe streifen umher.', 'bad');
@@ -758,6 +949,7 @@ class Game {
     const night = 1 - this.env.daylight;
     let cold = night * 0.55 + (p.swimming ? 1.2 : p.wading ? 0.3 : 0) + Math.max(0, (p.pos.y - 28) / 30);
     if (this.inv.coat) cold *= 0.5;
+    if (this.inv.armor) cold *= 0.85;
     if (this.nearShelter()) cold *= 0.6;
     if (this.selected === 'torch') cold = Math.max(0, cold - 0.25);
     const warm = this.env.daylight * 0.5 + this.heatAt(p.pos.x, p.pos.z) * 4;
@@ -790,6 +982,15 @@ class Game {
     const p = this.player.pos;
     const t = performance.now() / 1000;
     for (const st of this.structures) {
+      if (st.type === 'trap') {
+        if (!st.caught) {
+          st.catchT -= dt;
+          if (st.catchT <= 0) st.caught = true;
+        }
+        st.mesh.userData.bunny.visible = st.caught;
+        st.mesh.userData.stick.rotation.x = st.caught ? 1.5 : 0.6;
+        continue;
+      }
       if (st.type !== 'campfire') continue;
       const burning = st.fuel > 0;
       if (burning) {
@@ -858,20 +1059,32 @@ class Game {
       const big = def.kind === 'tree' || def.kind === 'rock';
       consider('obj', o, o.x, o.y, o.y + def.top * o.s * o.sy, o.z, def.r * o.s, big ? reach : 2.7);
     });
+    const SIZE = { campfire: [0.8, 0.8], shelter: [1.5, 1.8], palisade: [1.5, 1.8], trap: [0.5, 0.5] };
     for (const st of this.structures) {
-      const fire = st.type === 'campfire';
-      consider('struct', st, st.x, st.y, st.y + (fire ? 0.8 : 1.8), st.z, fire ? 0.8 : 1.5, 3);
+      const [r, h] = SIZE[st.type];
+      consider('struct', st, st.x, st.y, st.y + h, st.z, r, 3);
     }
-    if (dir.y < -0.05) {
+    this.waterPoint = null;
+    const waterReach = this.selected === 'rod' ? 9 : 3.6;
+    if (dir.y < -0.03) {
       const t = (WATER_LEVEL - eye.y) / dir.y;
-      if (t > 0 && t < 3.6 && t < bestD) {
+      if (t > 0 && t < waterReach && t < bestD) {
         const hx = eye.x + dir.x * t, hz = eye.z + dir.z * t;
-        if (this.world.height(hx, hz) < WATER_LEVEL - 0.1) best = { kind: 'water' };
+        if (this.world.height(hx, hz) < WATER_LEVEL - 0.1) {
+          best = { kind: 'water', far: t > 3.6 };
+          this.waterPoint = { x: hx, z: hz };
+        }
       }
     }
     if (!best && (this.player.swimming || this.player.wading)) best = { kind: 'water' };
     this.target = best;
-    this.ui.setPrompt(this.ghostPrompt || this.promptFor(best));
+    let prompt = this.ghostPrompt || this.promptFor(best);
+    if (this.fishing) {
+      prompt = this.fishing.bite > 0
+        ? '<div class="t">🎣 Es zappelt!</div><kbd>LMB</kbd> Jetzt einholen!'
+        : '<div class="t">🎣 Angeln …</div>Warte, bis der Schwimmer abtaucht';
+    }
+    this.ui.setPrompt(prompt);
   }
 
   promptFor(t) {
@@ -882,20 +1095,28 @@ class Game {
       return `<div class="t">${a.def.name}</div><kbd>LMB</kbd> Angreifen${hpbar(a.hp, a.def.hp)}`;
     }
     if (t.kind === 'water') {
+      if (this.selected === 'rod') return '<div class="t">Wasser</div><kbd>LMB</kbd> Angel auswerfen';
+      if (t.far) return '';
       let s = `<div class="t">Wasser</div><kbd>E</kbd> Trinken`;
       if (this.inv.flask) s += ` &nbsp; <kbd>R</kbd> Flasche füllen (${this.inv.water || 0}/3)`;
       return s;
     }
     if (t.kind === 'struct') {
       const st = t.ref;
+      const tear = this.selected === 'axe' ? `<br><kbd>LMB</kbd> Abreißen` : '';
       if (st.type === 'shelter') {
-        return `<div class="t">Unterschlupf</div><kbd>E</kbd> ${this.isNight() ? 'Schlafen bis zum Morgen' : 'Wiedereinstieg setzen'}`;
+        return `<div class="t">Unterschlupf</div><kbd>E</kbd> ${this.isNight() ? 'Schlafen bis zum Morgen' : 'Wiedereinstieg setzen'}${tear}`;
+      }
+      if (st.type === 'palisade') return `<div class="t">Palisade</div>${tear || 'Hält Tiere fern'}`;
+      if (st.type === 'trap') {
+        return `<div class="t">Hasenfalle</div>${st.caught ? '<kbd>E</kbd> Hasen herausnehmen' : 'wartet auf Beute …'}${tear}`;
       }
       const m = Math.floor(st.fuel / 60), sec = String(Math.floor(st.fuel % 60)).padStart(2, '0');
       let s = `<div class="t">Lagerfeuer</div>${st.fuel > 0 ? `brennt noch ${m}:${sec}` : '<span class="warn">erloschen</span>'}<br>`;
-      if (this.inv.rawMeat) s += `<kbd>E</kbd> Fleisch braten (${this.inv.rawMeat}) &nbsp; `;
+      const raw = (this.inv.rawMeat || 0) + (this.inv.rawFish || 0);
+      if (raw) s += `<kbd>E</kbd> Braten (${raw}) &nbsp; `;
       s += `<kbd>R</kbd> Holz nachlegen (${this.inv.wood || 0})`;
-      return s;
+      return s + tear;
     }
     const o = t.ref, def = OBJ[o.type];
     if (def.kind === 'tree' || def.kind === 'rock') {
@@ -921,16 +1142,28 @@ class Game {
     if (!ITEMS[sel].place || this.invOpen) return;
     const g = this.ghosts[sel];
     const p = this.player;
-    const dist = sel === 'shelter' ? 3.5 : 2.6;
+    const dist = { shelter: 3.5, palisade: 3, trap: 2.2, campfire: 2.6 }[sel];
     const x = p.pos.x - Math.sin(p.yaw) * dist, z = p.pos.z - Math.cos(p.yaw) * dist;
     const h = this.world.height(x, z);
     let valid = h > WATER_LEVEL + 0.3 && this.world.slopeAt(x, z).ny > 0.82;
-    const clear = sel === 'shelter' ? 2.2 : 1.3;
+    const clear = { shelter: 2.2, palisade: 0.5, trap: 0.8, campfire: 1.3 }[sel];
+    // Prüfpunkte: Mitte, bei der Palisade zusätzlich beide Enden
+    const pts = [[x, z]];
+    if (sel === 'palisade') {
+      const dx = Math.cos(p.yaw) * 1.4, dz = -Math.sin(p.yaw) * 1.4;
+      pts.push([x - dx, z - dz], [x + dx, z + dz]);
+    }
     if (valid) {
-      this.world.forEachNear(x, z, o => {
-        if (OBJ[o.type].col > 0 && Math.hypot(o.x - x, o.z - z) < clear + OBJ[o.type].col * o.s) valid = false;
-      });
-      for (const st of this.structures) if (Math.hypot(st.x - x, st.z - z) < 2.5) valid = false;
+      for (const [px, pz] of pts) {
+        if (this.world.height(px, pz) < WATER_LEVEL + 0.2) valid = false;
+        this.world.forEachNear(px, pz, o => {
+          if (OBJ[o.type].col > 0 && Math.hypot(o.x - px, o.z - pz) < clear + OBJ[o.type].col * o.s) valid = false;
+        });
+      }
+      for (const st of this.structures) {
+        const min = sel === 'palisade' && st.type === 'palisade' ? 1.2 : 2.0;
+        if (Math.hypot(st.x - x, st.z - z) < min) valid = false;
+      }
     }
     g.visible = true;
     g.position.set(x, h, z);
@@ -959,6 +1192,14 @@ class Game {
     if (sel === 'spear') {
       root.rotation.set(0.05, -0.2, 0);
       root.position.z = VM_POS.z - swing * 0.45;
+    } else if (sel === 'bow') {
+      root.rotation.set(0.05, -0.1, 0);
+      root.position.z = VM_POS.z + swing * 0.08;
+      this.viewModels.bow.userData.arrow.visible = (this.inv.arrow || 0) > 0 && this.attackCD < 0.35;
+    } else if (sel === 'rod') {
+      const f = this.fishing;
+      const tug = f && f.bite > 0 ? Math.sin(performance.now() / 40) * 0.08 : 0;
+      root.rotation.set(0.05 - swing * 0.9 + (f ? -0.25 : 0) + tug, -0.2, 0);
     } else if (ITEMS[sel].food) {
       root.rotation.set(0.05 + swing * 0.6, -0.2 - swing * 0.4, 0);
       root.position.x -= swing * 0.15;

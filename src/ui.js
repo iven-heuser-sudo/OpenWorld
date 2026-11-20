@@ -1,5 +1,5 @@
 // HUD, Hotbar, Inventar/Herstellen, Minikarte und Menüs.
-import { ITEMS, RECIPES } from './items.js';
+import { ITEMS, RECIPES, CATEGORIES } from './items.js';
 
 const $ = id => document.getElementById(id);
 const STAT_KEYS = ['health', 'hunger', 'thirst', 'warmth', 'stamina'];
@@ -73,7 +73,8 @@ export class UI {
     this.hotbarSig = sig;
     $('hotbar').innerHTML = slots.map((id, i) => {
       const it = ITEMS[id];
-      const count = it.tool || it.unique ? '' : `<span class="count">${inv[id] || 0}</span>`;
+      const count = it.ammo ? `<span class="count">${inv[it.ammo] || 0}</span>`
+        : it.tool || it.unique ? '' : `<span class="count">${inv[id] || 0}</span>`;
       const key = i < 9 ? i + 1 : i === 9 ? 0 : '';
       return `<div class="slot${id === selected ? ' sel' : ''}" data-i="${i}" title="${it.name}">
         <span class="key">${key}</span><span class="icon">${it.icon}</span>${count}</div>`;
@@ -137,17 +138,24 @@ export class UI {
       ? ids.map(id => `<div class="inv-item" title="${ITEMS[id].name}"><span class="icon">${ITEMS[id].icon}</span>
           <span class="name">${ITEMS[id].name}</span><span class="n">${ITEMS[id].unique ? '' : inv[id]}</span></div>`).join('')
       : '<div class="empty">Dein Rucksack ist leer. Sammle Äste, Steine und Farne!</div>';
-    $('craft-list').innerHTML = RECIPES.map(r => {
-      const it = ITEMS[r.id];
-      const owned = it.unique && inv[r.id] > 0;
-      const can = !owned && Object.entries(r.needs).every(([k, n]) => (inv[k] || 0) >= n);
-      const needs = Object.entries(r.needs).map(([k, n]) =>
-        `<span class="need ${(inv[k] || 0) >= n ? 'ok' : 'no'}">${ITEMS[k].icon} ${inv[k] || 0}/${n}</span>`).join('');
-      return `<div class="recipe ${can ? 'can' : ''}">
-        <div class="r-icon">${it.icon}</div>
-        <div class="r-body"><div class="r-name">${it.name}${owned ? ' <em>(vorhanden)</em>' : ''}</div>
-          <div class="r-desc">${r.desc}</div><div class="r-needs">${needs}</div></div>
-        <button data-craft="${r.id}" ${can ? '' : 'disabled'}>Herstellen</button></div>`;
+    const nearFire = this.g.playerNearFire(4);
+    $('craft-list').innerHTML = CATEGORIES.map(cat => {
+      const rows = RECIPES.filter(r => r.cat === cat).map(r => {
+        const it = ITEMS[r.id];
+        const owned = it.unique && inv[r.id] > 0;
+        const fireOk = !r.fire || nearFire;
+        const can = !owned && fireOk && Object.entries(r.needs).every(([k, n]) => (inv[k] || 0) >= n);
+        let needs = Object.entries(r.needs).map(([k, n]) =>
+          `<span class="need ${(inv[k] || 0) >= n ? 'ok' : 'no'}">${ITEMS[k].icon} ${inv[k] || 0}/${n}</span>`).join('');
+        if (r.fire) needs += `<span class="need ${nearFire ? 'ok' : 'no'}">🔥 am Feuer</span>`;
+        const name = `${r.out > 1 ? r.out + '× ' : ''}${it.name}`;
+        return `<div class="recipe ${can ? 'can' : ''}">
+          <div class="r-icon">${it.icon}</div>
+          <div class="r-body"><div class="r-name">${name}${owned ? ' <em>(vorhanden)</em>' : ''}</div>
+            <div class="r-desc">${r.desc}</div><div class="r-needs">${needs}</div></div>
+          <button data-craft="${r.id}" ${can ? '' : 'disabled'}>Herstellen</button></div>`;
+      }).join('');
+      return `<div class="cat">${cat}</div>${rows}`;
     }).join('');
   }
 
